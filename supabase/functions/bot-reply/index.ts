@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
         contents: [{ role: "user", parts: [{ text: system }] }],
         generationConfig: { temperature: 0.88, maxOutputTokens: 160 },
       }),
-      signal: AbortSignal.timeout(18000),
+      signal: AbortSignal.timeout(45000),
     });
     if (!response.ok) {
       const err = await response.text();
