@@ -16,13 +16,19 @@ Live app: https://tamacha.vercel.app
 - Reusing a room for the same pair, with new ball sections. 3-day pause enforced by the server.
 - Realtime change subscriptions plus a periodic refresh fallback.
 
-## Deliberately not included in online MVP
-- Real-money purchases and points purchases.
-- Locked/private message delivery, key-based unlock and cryptographic/private access protections.
-- Automatic morning ball, push notifications, moderation, account deletion, reporting and blocking.
-- The online app must never imply that messages are private: everything sent online is readable by other authenticated members.
+## Latest online features
+- Public browsing without an account: guests can view balls, posts, and unlocked/public portions of conversations.
+- Registration is requested only when the visitor tries to post, throw a ball, start a chat, like, follow, or purchase.
+- Supabase email registration uses `emailRedirectTo: https://tamacha.vercel.app/`; the Supabase Auth URL Configuration must permit this URL, otherwise confirmations can still redirect incorrectly.
+- 04:00 JST morning ball, once per signed-in user per day.
+- Server-side test item purchases for points/locks/keys (no actual payments).
+- Live lock/key mechanics: messages written under a lock are protected with message-level RLS and become readable to authorized participants and purchasers of a higher-ranked key.
+- Original standalone local demo remains at `/demo.html`.
 
-Lock and key mechanics remain available **only as local mock interactions** at `/demo.html`; demo content is not synchronized.
+## Not production-ready
+- Real-money billing, push notifications, moderation, reporting/blocking, account deletion.
+- Real browser two-device end-to-end testing; database function smoke tests passed but the entire UI flow still needs human testing.
+- This is a **test** of publicly browseable conversations. Don't send personal or sensitive information; messages outside lock periods are public.
 
 ## Current infrastructure
 - GitHub: yeappi/tamacha
