@@ -363,6 +363,22 @@ textarea.plain{width:100%;border:0;outline:0;resize:none;border-radius:16px;padd
 .gpick{display:flex;gap:8px;margin-top:8px}
 .gpick button{flex:1;height:38px;border-radius:12px;background:#fff;font-size:13px;box-shadow:0 0 0 1px var(--line) inset}
 .gpick button.on{box-shadow:0 0 0 2px var(--gc) inset}
+
+/* LIVE MVP: authentication gate while retaining the original visual world */
+#authGate{position:absolute;inset:0;z-index:95;display:flex;justify-content:center;align-items:center;padding:28px;background:linear-gradient(145deg,#626e80,#bdc6d0 70%,#dbe1e8)}
+#authGate[hidden]{display:none!important}
+.authbox{width:min(100%,360px);background:rgba(244,247,250,.83);border:1px solid rgba(255,255,255,.8);padding:30px 24px;border-radius:30px;box-shadow:0 25px 55px -22px rgba(22,34,49,.3);backdrop-filter:blur(22px)}
+.authbox h1{font:500 38px var(--mincho);text-align:center;margin:0;color:#39475a;letter-spacing:.2em}
+.authbox p{font-size:12px;color:var(--ink-2);text-align:center;margin:12px 0 22px}
+.authbox label{font-size:12px;color:var(--ink-2);display:block;margin:12px 0 4px}
+.authbox input{border:1px solid #d4dce4;background:white;border-radius:12px;padding:12px;width:100%;font-size:15px}
+.authbox .btn{margin-top:20px}
+.authbox button.link{display:block;margin:12px auto 0;color:var(--hydra-d);font-size:12px;text-decoration:underline}
+#authError{color:#a33a42!important;min-height:1em;text-align:center}
+body.live #me .items, body.live #me [data-act="shop"]{display:none}
+body.live #me .meters{grid-template-columns:repeat(3,minmax(0,1fr))}
+body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
+#liveBadge{font-size:10px;color:white;background:rgba(71,108,93,.7);border-radius:30px;padding:3px 8px;display:inline-block;letter-spacing:.06em}
 </style>
 </head>
 <body>
@@ -414,10 +430,25 @@ textarea.plain{width:100%;border:0;outline:0;resize:none;border-radius:16px;padd
   </nav>
 
   <div id="layers"></div>
+  <div id="authGate"><div class="authbox">
+    <h1>こちゃ</h1><p>二人の会話を、誰かがそっとのぞく。<br>オンラインMVP</p>
+    <form id="authForm"><label>メールアドレス</label><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+      <label>パスワード（6文字以上）</label><input name="password" type="password" minlength="6" autocomplete="current-password" required>
+      <div id="signupFields" hidden><label>表示名</label><input name="name" maxlength="20" placeholder="あなたの名前"></div>
+      <button class="btn hydra block" id="authSubmit" type="submit">ログイン</button></form>
+    <button class="link" type="button" id="authSwitch">新規登録はこちら</button><p id="authError"></p>
+    <p style="margin:8px 0 0;font-size:11px">これは公開のぞき見SNSです。<br>本名や秘密の話は投稿しないでください。</p>
+  </div></div>
   <div id="toast" role="status" aria-live="polite"></div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.min.js"></script>
 <script>
 'use strict';
+const LIVE = true;
+const SB_URL = "https://nqoogxrkbslaenaanzlg.supabase.co";
+const SB_KEY = "sb_publishable_ahwXLx1jEq3NIQLzDjw7Uw_GetNAVMW";
+let SB = null, authUid = null, loadingRemote = false, queuedRemote = false;
+
 /* =====================================================================
    CONFIG — 仕様の数値はここにまとめています。
    「※補完」は仕様書に具体値がなく、テスト版のために仮で決めた値です。
@@ -491,7 +522,7 @@ function durLabel(ms) { return ms >= H ? (ms / H) + '時間' : (ms / M) + '分';
    ===================================================================== */
 let S = null;
 
-function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { } }
+function save() { if (LIVE) { try { if (S && S.users[me()]) localStorage.setItem('tamacha_follow_'+me(),JSON.stringify(user(me()).following)); } catch(e){} return; } try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch(e){} }
 function load() { try { const s = localStorage.getItem(STORE_KEY); if (s) return JSON.parse(s); } catch (e) { } return null; }
 
 const me = () => S.current;
@@ -667,6 +698,7 @@ function ballLabel(b) {
 
 /* 毎朝4:00のリセットと、朝の自動投稿玉 */
 function ensureDaily(id = me()) {
+  if (LIVE) return false;
   const a = acct(id), k = dayKey(now());
   if (a.dayKey === k) return false;
   const first = a.dayKey === null;
@@ -681,7 +713,12 @@ function ensureDaily(id = me()) {
 }
 
 /* 玉から話しかける（1日15回の対象） */
-function startTalkFromBall(ballId, text) {
+async function startTalkFromBall(ballId, text) {
+  if (LIVE) {
+    const {data,error} = await SB.rpc('start_ball_chat',{p_ball:ballId,p_body:text});
+    if(error) {toast(error.message.includes('15')?'本日の15回を使い切りました':error.message);return null;}
+    await remoteSync(); return roomById(data);
+  }
   const b = ballById(ballId), a = acct();
   if (a.sends <= 0) return null;
   let r = roomBetween(me(), b.owner);
@@ -699,7 +736,12 @@ function directOpenable(b) {
   const r = roomBetween(me(), b.owner);
   return r && lastSeg(r).ballId === b.id && !isPaused(r) ? r : null;
 }
-function sendMessage(r, text) {
+async function sendMessage(r, text) {
+  if (LIVE) {
+    const {error}=await SB.rpc('send_room_chat',{p_room:r.id,p_body:text});
+    if(error){toast(error.message.includes('paused')?'3日経過したため玉から再開してください':error.message);return;}
+    await remoteSync();return;
+  }
   const L = activeLock(r);
   const m = { id: uid('m'), from: me(), text, at: now(), lock: L ? L.id : null };
   lastSeg(r).messages.push(m);
@@ -709,6 +751,7 @@ function sendMessage(r, text) {
   return m;
 }
 function useLock(r, kind) {
+  if (LIVE) {toast('錠と鍵はまだ疑似デモのみ対応です');return false;}
   const a = acct();
   if (!a.items['lock_' + kind] || activeLock(r)) return false;
   a.items['lock_' + kind]--;
@@ -716,6 +759,7 @@ function useLock(r, kind) {
   save(); return true;
 }
 function useKey(lockId, kind) {
+  if (LIVE) {toast('鍵はまだ疑似デモのみ対応です');return false;}
   const a = acct();
   if (!a.items['key_' + kind]) return false;
   a.items['key_' + kind]--; a.unlocked.push(lockId); save(); return true;
@@ -729,6 +773,7 @@ const REPLIES = {
 };
 const typingRooms = new Set();
 function scheduleReply(r) {
+  if (LIVE) return;
   const p = partner(r);
   if (isAccount(p) || typingRooms.has(r.id)) return;
   const seg = lastSeg(r), mine = seg.messages.filter(m => m.from === me());
@@ -746,7 +791,14 @@ function scheduleReply(r) {
 }
 
 /* 玉をつくる */
-function throwBalls({ type, text, postId, color, pt, count, rainbow }) {
+async function throwBalls({ type, text, postId, color, pt, count, rainbow }) {
+  if (LIVE) {
+    if (rainbow) {toast('虹色は正式課金実装後に使えます');return null;}
+    const {data,error}=await SB.rpc('throw_ball',{p_kind:type,p_text:text || '',p_post:postId || null,p_color:color,p_points:pt,p_count:count});
+    if(error){toast(error.message.includes('points')?'今日のポイントが足りません':error.message);return null;}
+    await remoteSync();
+    return (data || []).map(x=>ballById(x.id)).filter(Boolean);
+  }
   const a = acct();
   const cost = (pt + (rainbow ? CONFIG.rainbowCost : 0)) * count;
   const field = type === 'mood' ? 'moodPt' : 'postPt';
@@ -761,6 +813,7 @@ function throwBalls({ type, text, postId, color, pt, count, rainbow }) {
 }
 /* 更新のたびに、ほかの誰かが新しい玉を投げている（にぎわいの演出） */
 function fakeActivity() {
+  if (LIVE) return;
   const words = ['ひま', 'ねむい', '雨の音', 'だれか', '帰り道', 'ココア', '眠れない', 'すき', '話そ', '夜更かし', 'ただいま', 'おつかれ', 'さむい', '静か'];
   const fakes = Object.keys(S.users).filter(id => !isAccount(id));
   const [lo, hi] = CONFIG.fakeBallsPerReload;
@@ -1256,7 +1309,7 @@ function openTalk(roomId, fromBallId) {
       const f = bottom.querySelector('form'), ta = f.querySelector('textarea');
       ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; });
       ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); f.requestSubmit(); } });
-      f.addEventListener('submit', e => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ''; ta.style.height = ''; sendMessage(roomById(roomId), v); refresh(); });
+      f.addEventListener('submit', async e => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ''; ta.style.height = ''; await sendMessage(roomById(roomId), v); refresh(); });
       updateLockState();
     };
     const updateLockState = () => {
@@ -1278,7 +1331,7 @@ function openTalk(roomId, fromBallId) {
     if (!peek) { save(); updateDot(); }
     L.timers.push(setInterval(() => { if (!peek) { if (isPaused(roomById(roomId))) renderBottom(); else updateLockState(); } }, 1000));
     // のぞいている間も、ふたりの会話は続いていく
-    if (peek) L.timers.push(setInterval(() => {
+    if (peek && !LIVE) L.timers.push(setInterval(() => {
       const r = roomById(roomId); if (!r.live || !r.live.length) return;
       const [w, text] = r.live.shift(); const Lk = activeLock(r);
       lastSeg(r).messages.push({ id: uid('m'), from: r[w], text, at: now(), lock: Lk ? Lk.id : null });
@@ -1363,10 +1416,11 @@ function openStart(ballId) {
       <button class="btn hydra block" data-go>送る</button>`;
     body.querySelector('#mini').appendChild(ballCanvas(b, 24, { margin: 0 }));
     const ta = body.querySelector('textarea'); setTimeout(() => ta.focus(), 420);
-    body.querySelector('[data-go]').onclick = () => {
+    body.querySelector('[data-go]').onclick = async () => {
       const v = ta.value.trim(); if (!v) { ta.focus(); return; }
-      const room = startTalkFromBall(ballId, v);
-      if (!room) { toast('今日はもう話しかけられません'); return; }
+      const btn = body.querySelector('[data-go]');btn.disabled=true;
+      const room = await startTalkFromBall(ballId, v);
+      if (!room) {btn.disabled=false;return;}
       closeLayer(L); refresh(); openTalk(room.id);
     };
   });
@@ -1558,7 +1612,7 @@ function openComposer(init = {}) {
     };
     inner.querySelectorAll('[data-ct]').forEach(b => b.onclick = () => { c.type = b.dataset.ct; renderFields(); });
     L.refresh = () => { if (!inner.querySelector('.wordin:focus,.nt:focus')) summary(); };
-    function go() {
+    async function go() {
       if (c.type === 'mood' && !chars(c.text)) return;
       let postId = null;
       if (c.type === 'post') {
@@ -1566,8 +1620,12 @@ function openComposer(init = {}) {
         else postId = c.postId;
       }
       if (cost() > pool()) { toast('ポイントが足りません'); return; }
-      if (postId && c.postId === 'new') S.posts.push({ id: postId, owner: me(), text: c.newText.trim(), at: now(), likes: [], likeBase: 0 });
-      const made = throwBalls({ type: c.type, text: c.text, postId, color: c.color, pt: c.pt, count: c.count, rainbow: c.rainbow });
+      if (postId && c.postId === 'new') {
+        if (LIVE) {const {data,error}=await SB.from('posts').insert({owner:me(),body:c.newText.trim()}).select().single();
+          if(error){toast(error.message);return;}postId=data.id;await remoteSync();}
+        else S.posts.push({ id:postId,owner:me(),text:c.newText.trim(),at:now(),likes:[],likeBase:0 });
+      }
+      const made = await throwBalls({ type: c.type, text: c.text, postId, color: c.color, pt: c.pt, count: c.count, rainbow: c.rainbow });
       if (!made) return;
       closeLayer(L); refresh();
       flyBalls(made);
@@ -1643,7 +1701,7 @@ function renderMe() {
     <div class="timeline">${posts.map(p => postCard(p, false, `<div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn small ghost" data-act="throwPost" data-id="${p.id}">${IC.article}玉にして投げる</button></div>`)).join('')}</div>
     <h2 class="sec">投げた玉　${balls.length}</h2>
     <div class="ballgrid" id="myBalls"></div>
-    <h2 class="sec">テスト用ツール</h2>
+    <h2 class="sec" style="margin-top:24px">アカウント</h2><button class="btn ghost block" data-act="logout">ログアウト</button><div style="display:none"><h2 class="sec">テスト用ツール</h2>
     <div class="card" style="padding:16px">
       <div class="small" style="font-weight:500;margin-bottom:10px">アカウントを切り替える</div>
       ${S.accounts.map(id => `<button class="acct ${id === me() ? 'on' : ''}" data-act="switchAcct" data-id="${id}">${avatar(id, 36)}<span class="grow"><b style="font-weight:500">${esc(user(id).name)}</b><span class="small muted" style="display:block">${id === 'u_me' ? 'メインのアカウント' : '第三者としてのぞき見するためのアカウント'}</span></span>${id === me() ? '<span class="chip">使用中</span>' : ''}</button>`).join('')}
@@ -1660,7 +1718,7 @@ function renderMe() {
         <li>真ん中の水晶玉から玉をつくって投げ、わーるどを更新する</li>
       </ol>
       <div class="tools" style="margin-top:16px"><button class="btn small ghost" data-act="resetData" style="color:#B5574B">${resetArm > Date.now() ? 'もう一度押すと初期化します' : 'データを初期化'}</button></div>
-    </div>`;
+    </div></div>`;
   const g = el.querySelector('#myBalls'); balls.forEach(b => g.appendChild(miniBallBtn(b)));
   if (!balls.length) g.outerHTML = '<p class="muted small">まだ玉はありません。真ん中の水晶玉から投げてみよう</p>';
 }
@@ -1680,9 +1738,11 @@ function openEditProfile() {
       <div class="gpick">${Object.entries(CONFIG.gender).map(([k, v]) => `<button data-g="${k}" style="--gc:${v.color}" class="${g === k ? 'on' : ''}">${v.label}</button>`).join('')}</div>
       <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end"><button class="btn small ghost" data-act="close">キャンセル</button><button class="btn small" data-save>保存する</button></div>`;
     inner.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { g = b.dataset.g; inner.querySelectorAll('[data-g]').forEach(x => x.classList.toggle('on', x === b)); });
-    inner.querySelector('[data-save]').onclick = () => {
+    inner.querySelector('[data-save]').onclick = async () => {
       const n = inner.querySelector('.en').value.trim(); if (!n) return;
-      u.name = n; u.bio = inner.querySelector('.eb').value.trim(); u.gender = g; save(); closeLayer(L); refresh(); worlds.forEach(w => w.wake()); toast('プロフィールを保存しました', 'check');
+      if(LIVE){const {error}=await SB.from('profiles').update({name:n,gender:g}).eq('id',me());if(error){toast(error.message);return;}await remoteSync();}
+      else{u.name=n;u.bio=inner.querySelector('.eb').value.trim();u.gender=g;save();}
+      closeLayer(L);refresh();worlds.forEach(w=>w.wake());toast('プロフィールを保存しました','check');
     };
   });
 }
@@ -1699,8 +1759,8 @@ function setTab(t) {
   if (t === 'follow' && followDirty) { followDirty = false; followWorld.build(); }
   if (t === 'chats') renderChats(); if (t === 'me') renderMe();
 }
-function reloadWorld(w = mainWorld, btnSel = '[data-act="reload"]') {
-  fakeActivity();
+async function reloadWorld(w = mainWorld, btnSel = '[data-act="reload"]') {
+  if(LIVE) await remoteSync(); else fakeActivity();
   const btn = $(btnSel); if (btn) { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); }
   w.canvas.animate([{ opacity: 1 }, { opacity: .25, offset: .4 }, { opacity: 1 }], { duration: 560, easing: 'ease-in-out' });
   setTimeout(() => w.build(true), 220);
@@ -1716,18 +1776,22 @@ const ACT = {
   ball: d => openBall(d.id),
   openTalk: d => openTalk(d.id, d.ball),
   startTalk: d => { const b = ballById(d.id); const r = directOpenable(b); if (r) openTalk(r.id); else openStart(d.id); },
-  like: d => { const p = postById(d.id), i = p.likes.indexOf(me()); i >= 0 ? p.likes.splice(i, 1) : p.likes.push(me()); save(); refresh(); },
+  like: d => { if (LIVE) {toast('いいねの共有機能は次のアップデートで対応します');return;} const p = postById(d.id), i = p.likes.indexOf(me()); i >= 0 ? p.likes.splice(i, 1) : p.likes.push(me()); save(); refresh(); },
   follow: d => { const f = user(me()).following, i = f.indexOf(d.id); i >= 0 ? f.splice(i, 1) : f.push(d.id); followDirty = true; save(); refresh(); },
-  lockPick: d => openLockPicker(d.id),
+  lockPick: d => LIVE ? toast('錠と鍵はデモ版のみ。オンラインではすべての会話が公開されます') : openLockPicker(d.id),
   useLock: d => { if (useLock(roomById(d.room), d.kind)) { closeLayer(); toast(`${CONFIG.locks[d.kind].name}をかけました。ここからの会話は第三者から隠れます`); refresh(); worlds.forEach(w => w.wake()); } },
-  keyPick: d => openKeyPicker(d.room, d.lock),
+  keyPick: d => LIVE ? toast('鍵はデモ版のみ対応です') : openKeyPicker(d.room, d.lock),
   useKey: d => { if (useKey(d.lock, d.kind)) { closeLayer(); toast('開けました。中身はあなたにだけ見えています', 'check'); refresh(); } },
   buy: d => openIAP(d.item),
-  shop: () => openShop(),
+  shop: () => LIVE ? toast('疑似課金は /demo.html で試せます') : openShop(),
+  logout: async () => { if(SB) await SB.auth.signOut();location.reload(); },
   editProfile: () => openEditProfile(),
-  postNew: () => { const ta = $('#me .np'); const v = ta.value.trim(); if (!v) { ta.focus(); return; } S.posts.push({ id: uid('p'), owner: me(), text: v, at: now(), likes: [], likeBase: 0 }); ta.value = ''; save(); refresh(); toast('投稿しました。ワールドに流すときは「玉にして投げる」から', 'check'); },
+  postNew: async () => { const ta=$('#me .np');const v=ta.value.trim();if(!v){ta.focus();return;}
+    if(LIVE){const {error}=await SB.from('posts').insert({owner:me(),body:v});if(error){toast(error.message);return;}await remoteSync();}
+    else S.posts.push({id:uid('p'),owner:me(),text:v,at:now(),likes:[],likeBase:0});
+    ta.value='';save();refresh();toast('投稿しました。玉にして投げることもできます','check'); },
   throwPost: d => openComposer({ type: 'post', postId: d.id }),
-  switchAcct: d => { if (d.id === me()) return; S.current = d.id; ensureDaily(d.id); save(); closeAll(); followDirty = true; refresh(); toast(`${user(d.id).name}に切り替えました`); },
+  switchAcct: d => { if (LIVE) return; if (d.id === me()) return; S.current = d.id; ensureDaily(d.id); save(); closeAll(); followDirty = true; refresh(); toast(`${user(d.id).name}に切り替えました`); },
   time: d => { S.timeOffset += +d.ms; ensureDaily(); save(); refresh(); mainWorld.build(false); followDirty = true; toast(`時間を進めました（${md(now())} ${hm(now())}）`); },
   timeReset: () => { S.timeOffset = 0; save(); refresh(); mainWorld.build(false); followDirty = true; toast('現在の時刻に戻しました'); },
   resetData: () => {
@@ -1742,26 +1806,100 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && layers.length) closeLayer(); });
 
-(function boot() {
-  S = load();
-  if (!S || S.v !== 1) S = seed();
-  ensureDaily(); save();
-  mainWorld = new World($('#world-main'), {
-    filter: () => true, pullEl: $('#pull-main'), backEl: $('[data-act="worldTop"][data-w="main"]'),
-    onTap: b => { if (!S.hintDone) ACT.hideHint(); openBall(b.id); }, onPull: () => reloadWorld(),
-    onBuilt: n => $('#worldCount').textContent = `降り積もった玉　${n}`,
-  });
-  followWorld = new World($('#world-follow'), {
-    filter: b => user(me()).following.includes(b.owner), pullEl: $('#pull-follow'), backEl: $('[data-act="worldTop"][data-w="follow"]'),
-    onTap: b => openBall(b.id), onPull: () => reloadWorld(followWorld, '[data-act="reloadFollow"]'),
-  });
-  worlds = [mainWorld, followWorld];
-  mainWorld.setVisible(true); mainWorld.build(true);
-  $('#hint').hidden = !!S.hintDone;
-  refresh();
-  if (document.fonts) document.fonts.ready.then(() => { fontGen++; spriteCache.clear(); worlds.forEach(w => w.wake()); });
-  setInterval(() => { if (ensureDaily()) refresh(); }, 30e3);
-})();
+// Live snapshot is the only source of truth for shared messages.
+function dayStartUTC(){const t=new Date(Date.now()+9*3600000-4*3600000);t.setUTCHours(0,0,0,0);return t.getTime()-9*3600000+4*3600000;}
+async function remoteSync(){
+ if(!authUid||!SB)return;
+ if(loadingRemote){queuedRemote=true;return;}
+ loadingRemote=true;
+ try{
+   const [profiles,balls,posts,rooms,segments,messages]=await Promise.all([
+     SB.from('profiles').select('*').limit(500),
+     SB.from('balls').select('*').order('created_at',{ascending:false}).limit(180),
+     SB.from('posts').select('*').order('created_at',{ascending:false}).limit(200),
+     SB.from('rooms').select('*').order('last_message_at',{ascending:false}).limit(150),
+     SB.from('segments').select('*').order('created_at',{ascending:false}).limit(400),
+     SB.from('messages').select('*').order('created_at',{ascending:false}).limit(1200)
+   ]);
+   const errors=[profiles,balls,posts,rooms,segments,messages].filter(x=>x.error).map(x=>x.error.message);
+   if(errors.length)throw new Error(errors.join(' / '));
+   let follows=[];try{follows=JSON.parse(localStorage.getItem('tamacha_follow_'+authUid)||'[]')}catch(e){}
+   const users={};(profiles.data||[]).forEach(p=>users[p.id]={id:p.id,name:p.name,handle:p.name+'_'+p.id.slice(0,4),gender:p.gender||'o',hue:hash(p.id)%360,bio:'',following:p.id===authUid?follows:[]});
+   if(!users[authUid]){users[authUid]={id:authUid,name:'あなた',handle:'you',gender:'o',hue:190,bio:'',following:follows};}
+   const postList=(posts.data||[]).map(p=>({id:p.id,owner:p.owner,text:p.body,at:Date.parse(p.created_at),likes:[],likeBase:0}));
+   const ballList=(balls.data||[]).map(b=>({id:b.id,owner:b.owner,type:b.kind,text:b.text||'',postId:b.post_id,color:b.color,pt:b.points,rainbow:false,at:Date.parse(b.created_at)}));
+   const roomList=(rooms.data||[]).map(r=>({id:r.id,a:r.user_a,b:r.user_b,segments:[],live:[],lastMessageAt:Date.parse(r.last_message_at)}));
+   const byRoom=new Map(roomList.map(r=>[r.id,r]));
+   const bySeg=new Map();
+   (segments.data||[]).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at)).forEach(seg=>{
+     const r=byRoom.get(seg.room_id);if(!r)return;
+     const s={id:seg.id,ballId:seg.ball_id,starter:seg.started_by,at:Date.parse(seg.created_at),messages:[],locks:[]};r.segments.push(s);bySeg.set(s.id,s);
+   });
+   (messages.data||[]).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at)).forEach(m=>{
+     const seg=bySeg.get(m.segment_id);if(seg)seg.messages.push({id:m.id,from:m.sender_id,text:m.body,at:Date.parse(m.created_at),lock:null});
+   });
+   const k=dayStartUTC(), mine=ballList.filter(b=>b.owner===authUid&&b.at>=k);
+   const moodUsed=mine.filter(b=>b.type==='mood').reduce((n,b)=>n+b.pt,0),postUsed=mine.filter(b=>b.type==='post').reduce((n,b)=>n+b.pt,0);
+   const sendsUsed=(segments.data||[]).filter(x=>x.started_by===authUid&&Date.parse(x.created_at)>=k).length;
+   const prior=S?.acct?.[authUid];const account=newAcct();account.moodPt=Math.max(0,100-moodUsed);account.postPt=Math.max(0,100-postUsed);
+   account.sends=Math.max(0,15-sendsUsed);account.read=prior?.read||{};
+   S={v:1,timeOffset:0,current:authUid,accounts:[authUid],users,acct:{[authUid]:account},balls:ballList,posts:postList,rooms:roomList.filter(r=>r.segments.length),hintDone:true};
+   if(mainWorld){refresh();mainWorld.build(false);followDirty=true;}
+ }catch(e){console.error('remoteSync',e);toast('同期エラー: '+e.message);}
+ finally{loadingRemote=false;if(queuedRemote){queuedRemote=false;setTimeout(remoteSync,150);}}
+}
+let syncDebounce;
+function subscribeLive(){
+ SB.channel('tamacha-live').on('postgres_changes',{event:'*',schema:'public',table:'balls'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'rooms'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'segments'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'messages'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>scheduleSync()).subscribe();
+}
+function scheduleSync(){clearTimeout(syncDebounce);syncDebounce=setTimeout(remoteSync,450);}
+let startedUI=false;
+async function enterLive(session){
+ authUid=session.user.id;
+ const {data,error}=await SB.from('profiles').select('id').eq('id',authUid).maybeSingle();
+ if(error){$('#authError').textContent=error.message;return;}
+ if(!data){const name=localStorage.getItem('tamacha_name_'+authUid)||(session.user.email||'ユーザー').split('@')[0];
+   const {error:e}=await SB.from('profiles').insert({id:authUid,name:name.slice(0,25)||'ユーザー',gender:'o'});
+   if(e){$('#authError').textContent=e.message;return;}
+ }
+ await remoteSync();
+ if(!S){$('#authError').textContent='データを読み込めませんでした';return;}
+ $('#authGate').hidden=true;document.body.classList.add('live');
+ if(!startedUI){
+  startedUI=true;
+  mainWorld=new World($('#world-main'),{filter:()=>true,pullEl:$('#pull-main'),backEl:$('[data-act="worldTop"][data-w="main"]'),onTap:b=>openBall(b.id),onPull:()=>reloadWorld(),onBuilt:n=>$('#worldCount').textContent=`公開の玉　${n}`});
+  followWorld=new World($('#world-follow'),{filter:b=>user(me()).following.includes(b.owner),pullEl:$('#pull-follow'),backEl:$('[data-act="worldTop"][data-w="follow"]'),onTap:b=>openBall(b.id),onPull:()=>reloadWorld(followWorld,'[data-act="reloadFollow"]')});
+  worlds=[mainWorld,followWorld];mainWorld.setVisible(true);mainWorld.build(true);$('#hint').hidden=true;refresh();
+  if(document.fonts)document.fonts.ready.then(()=>{fontGen++;spriteCache.clear();worlds.forEach(w=>w.wake());});
+  subscribeLive();setInterval(remoteSync,12000);
+ }
+}
+async function boot(){
+ try{
+  if(!window.supabase){$('#authError').textContent='通信ライブラリを読み込めません。再読み込みしてください。';return;}
+  SB=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+  let signup=false;
+  $('#authSwitch').onclick=()=>{signup=!signup;$('#signupFields').hidden=!signup;$('#authSubmit').textContent=signup?'新規登録':'ログイン';$('#authSwitch').textContent=signup?'ログインはこちら':'新規登録はこちら';$('#authError').textContent='';};
+  $('#authForm').onsubmit=async e=>{
+    e.preventDefault();$('#authError').textContent='';const btn=$('#authSubmit');btn.disabled=true;btn.textContent='接続中…';
+    try{const f=new FormData(e.target),email=String(f.get('email')).trim(),password=String(f.get('password'));
+      if(signup){const name=String(f.get('name')||'').trim();if(!name)throw Error('表示名を入力してください');
+        const {data,error}=await SB.auth.signUp({email,password});if(error)throw error;
+        if(data.user)localStorage.setItem('tamacha_name_'+data.user.id,name);
+        if(data.session)await enterLive(data.session);
+        else $('#authError').textContent='確認メールを送信しました。メールのリンクを開いてからログインしてください。';
+      }else{const {data,error}=await SB.auth.signInWithPassword({email,password});if(error)throw error;await enterLive(data.session);}
+    }catch(err){$('#authError').textContent=err.message;}finally{btn.disabled=false;btn.textContent=signup?'新規登録':'ログイン';}
+  };
+  const {data:{session}}=await SB.auth.getSession();if(session)await enterLive(session);
+ }catch(e){console.error(e);$('#authError').textContent=e.message;}
+}
+boot();;
 </script>
 </body>
 </html>
