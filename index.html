@@ -729,30 +729,48 @@ function ensureDaily(id = me()) {
 /* AIキャラクターの返信は安全なEdge Functionから作成。
    APIキーはブラウザに置かず、ユーザーの認証済みセッションで呼び出す。 */
 const botReplyPending = new Set();
-async function triggerBotReply(roomId) {
-  if (!LIVE || !SB || !signedIn() || !roomId || botReplyPending.has(roomId)) return;
+const botReplyTimers = new Map();
+const botReplyAgain = new Set();
+
+// A burst of short messages is one conversational turn, not one AI request per tap.
+function triggerBotReply(roomId) {
+  if (!LIVE || !SB || !signedIn() || !roomId) return;
   const rr=roomById(roomId);
   if (!rr) return;
   const other=rr.a===authUid?rr.b:rr.a;
   if (!S.users[other]?.isBot) return;
+  if (botReplyTimers.has(roomId)) clearTimeout(botReplyTimers.get(roomId));
+  botReplyTimers.set(roomId,setTimeout(()=>{
+    botReplyTimers.delete(roomId);
+    runBotReply(roomId);
+  },2400));
+}
+async function runBotReply(roomId) {
+  if (botReplyPending.has(roomId)) {
+    botReplyAgain.add(roomId);
+    return;
+  }
   botReplyPending.add(roomId);
   try {
     const {data,error}=await SB.functions.invoke('bot-reply',{body:{room_id:roomId}});
-    if (error) {
-      console.warn('AI bot temporarily unavailable:',error);
-      toast('AI返信に失敗しました。少ししてからもう一度お試しください');
+    if(error) {
+      console.warn('AI bot response failed',error);
+      toast('AIの返信を取得できませんでした。あとで再度話しかけてください');
       return;
     }
-    if (data?.error) {
-      console.warn('AI bot:',data.error);
-      toast('AI返信に失敗しました。少ししてからもう一度お試しください');
+    if(data?.error) {
+      console.warn('AI bot response:',data.error);
+      if(!data.obsolete)toast('AIの返信を取得できませんでした');
       return;
     }
-    setTimeout(remoteSync,500);
+    if(data?.ok && !data?.obsolete) setTimeout(remoteSync,450);
   } catch(e) {
     console.warn('AI bot request failed',e);
-    toast('AIの返信に接続できませんでした');
-  } finally { botReplyPending.delete(roomId); }
+    toast('AIとの通信に失敗しました');
+  } finally {
+    botReplyPending.delete(roomId);
+    if(botReplyAgain.delete(roomId)) triggerBotReply(roomId);
+  }
 }
 
 /* 玉から話しかける（1日15回の対象） */
