@@ -366,6 +366,9 @@ textarea.plain{width:100%;border:0;outline:0;resize:none;border-radius:16px;padd
 
 /* LIVE MVP: authentication gate while retaining the original visual world */
 #authGate{position:absolute;inset:0;z-index:95;display:flex;justify-content:center;align-items:center;padding:28px;background:linear-gradient(145deg,#626e80,#bdc6d0 70%,#dbe1e8)}
+#guestEntry{position:absolute;z-index:9;top:calc(var(--safe-t) + 115px);right:16px;max-width:230px;padding:9px 12px;border-radius:17px;background:rgba(240,244,248,.85);box-shadow:0 8px 24px -10px rgba(24,36,48,.3);backdrop-filter:blur(12px);font-size:12px;color:var(--ink-2);line-height:1.45}
+#guestEntry button{display:inline-block;color:var(--hydra-d);font-weight:700;margin-left:6px}
+#guestEntry[hidden]{display:none!important}
 #authGate[hidden]{display:none!important}
 .authbox{width:min(100%,360px);background:rgba(244,247,250,.83);border:1px solid rgba(255,255,255,.8);padding:30px 24px;border-radius:30px;box-shadow:0 25px 55px -22px rgba(22,34,49,.3);backdrop-filter:blur(22px)}
 .authbox h1{font:500 38px var(--mincho);text-align:center;margin:0;color:#39475a;letter-spacing:.2em}
@@ -375,14 +378,14 @@ textarea.plain{width:100%;border:0;outline:0;resize:none;border-radius:16px;padd
 .authbox .btn{margin-top:20px}
 .authbox button.link{display:block;margin:12px auto 0;color:var(--hydra-d);font-size:12px;text-decoration:underline}
 #authError{color:#a33a42!important;min-height:1em;text-align:center}
-body.live #me .items, body.live #me [data-act="shop"]{display:none}
+body.live #me .items{display:flex}
 body.live #me .meters{grid-template-columns:repeat(3,minmax(0,1fr))}
 body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
 #liveBadge{font-size:10px;color:white;background:rgba(71,108,93,.7);border-radius:30px;padding:3px 8px;display:inline-block;letter-spacing:.06em}
 </style>
 </head>
 <body>
-<div id="deskNote"><b>こちゃ</b>二人の会話を、誰かがそっとのぞいている SNS のテスト版です。データはこのブラウザの中だけに保存され、課金はすべて疑似購入です。</div>
+<div id="deskNote"><b>こちゃ</b>二人の会話を、誰かがそっとのぞいている SNS のテスト版です。実際のユーザーとつながるオンラインMVP。購入はすべて疑似体験で、決済は発生しません。</div>
 <div id="phone">
   <div class="sky">
     <div class="bokeh" style="width:90px;height:90px;left:30px;top:150px;background:#E9B98A;opacity:.32"></div>
@@ -395,6 +398,7 @@ body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
   <!-- わーるど -->
   <section class="screen on" id="scr-world">
     <div class="world" id="world-main"></div>
+    <div id="emptyGuest" hidden style="position:absolute;left:22px;right:22px;top:38%;z-index:4;text-align:center;background:rgba(228,235,242,.72);padding:24px 17px;border-radius:24px;box-shadow:0 10px 32px -20px rgba(0,0,0,.5);backdrop-filter:blur(18px)"><div style="font-family:var(--mincho);font-size:20px;letter-spacing:.06em">ここに、誰かの気持ちが降ってくる。</div><p class="small" style="line-height:1.75">まだ玉がありません。<br>サンプルの世界で、玉と会話をのぞいてみよう。</p><a href="/demo.html" class="btn hydra" style="text-decoration:none">サンプルの世界を見てみる</a></div>
     <div class="topbar">
       <div class="wordmark">こちゃ<small id="worldCount"></small></div>
       <button class="iconbtn" data-act="reload" aria-label="ワールドを更新"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg></button>
@@ -430,14 +434,16 @@ body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
   </nav>
 
   <div id="layers"></div>
-  <div id="authGate"><div class="authbox">
+  <div id="guestEntry" hidden>まずは自由にのぞき見。<button type="button" data-act="authPrompt">登録・ログイン</button></div>
+  <div id="authGate" hidden><div class="authbox">
     <h1>こちゃ</h1><p>二人の会話を、誰かがそっとのぞく。<br>オンラインMVP</p>
     <form id="authForm"><label>メールアドレス</label><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
       <label>パスワード（6文字以上）</label><input name="password" type="password" minlength="6" autocomplete="current-password" required>
       <div id="signupFields" hidden><label>表示名</label><input name="name" maxlength="20" placeholder="あなたの名前"></div>
       <button class="btn hydra block" id="authSubmit" type="submit">ログイン</button></form>
-    <button class="link" type="button" id="authSwitch">新規登録はこちら</button><p id="authError"></p>
-    <p style="margin:8px 0 0;font-size:11px">これは公開のぞき見SNSです。<br>本名や秘密の話は投稿しないでください。</p>
+    <button class="link" type="button" id="authSwitch">新規登録はこちら</button>
+    <button class="link" type="button" id="authClose">閉じて、まずはのぞき見する</button><p id="authError"></p>
+    <p style="margin:8px 0 0;font-size:11px">通常の会話は他の利用者に公開されます。<br>錠の使用中だけ閲覧が制限されます。<br>購入はすべてテスト用で料金は発生しません。</p>
   </div></div>
   <div id="toast" role="status" aria-live="polite"></div>
 </div>
@@ -447,7 +453,15 @@ body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
 const LIVE = true;
 const SB_URL = "https://nqoogxrkbslaenaanzlg.supabase.co";
 const SB_KEY = "sb_publishable_ahwXLx1jEq3NIQLzDjw7Uw_GetNAVMW";
-let SB = null, authUid = null, loadingRemote = false, queuedRemote = false;
+const GUEST_ID = '__guest__';
+let SB = null, authUid = GUEST_ID, loadingRemote = false, queuedRemote = false;
+const signedIn = () => !!authUid && authUid !== GUEST_ID;
+function promptAuth(action='') {
+  if(signedIn()) return true;
+  const el=$('#authGate');el.hidden=false;
+  $('#authError').textContent= action ? `「${action}」にはアカウントが必要です。見るだけなら登録不要！` : '';
+  return false;
+}
 
 /* =====================================================================
    CONFIG — 仕様の数値はここにまとめています。
@@ -750,16 +764,24 @@ async function sendMessage(r, text) {
   scheduleReply(r);
   return m;
 }
-function useLock(r, kind) {
-  if (LIVE) {toast('錠と鍵はまだ疑似デモのみ対応です');return false;}
+async function useLock(r, kind) {
+  if (LIVE) {
+    const {error}=await SB.rpc('apply_chat_lock',{p_room:r.id,p_kind:kind});
+    if(error){toast(error.message);return false;}
+    await remoteSync();return true;
+  }
   const a = acct();
   if (!a.items['lock_' + kind] || activeLock(r)) return false;
   a.items['lock_' + kind]--;
   lastSeg(r).locks.push({ id: uid('lk'), kind, by: me(), at: now(), exp: now() + CONFIG.locks[kind].durationMs });
   save(); return true;
 }
-function useKey(lockId, kind) {
-  if (LIVE) {toast('鍵はまだ疑似デモのみ対応です');return false;}
+async function useKey(lockId, kind) {
+  if (LIVE) {
+    const {error}=await SB.rpc('unlock_chat_lock',{p_lock:lockId,p_kind:kind});
+    if(error){toast(error.message);return false;}
+    await remoteSync();return true;
+  }
   const a = acct();
   if (!a.items['key_' + kind]) return false;
   a.items['key_' + kind]--; a.unlocked.push(lockId); save(); return true;
@@ -793,8 +815,7 @@ function scheduleReply(r) {
 /* 玉をつくる */
 async function throwBalls({ type, text, postId, color, pt, count, rainbow }) {
   if (LIVE) {
-    if (rainbow) {toast('虹色は正式課金実装後に使えます');return null;}
-    const {data,error}=await SB.rpc('throw_ball',{p_kind:type,p_text:text || '',p_post:postId || null,p_color:color,p_points:pt,p_count:count});
+    const {data,error}=await SB.rpc('throw_ball',{p_kind:type,p_text:text || '',p_post:postId || null,p_color:color,p_points:pt,p_count:count,p_rainbow:!!rainbow});
     if(error){toast(error.message.includes('points')?'今日のポイントが足りません':error.message);return null;}
     await remoteSync();
     return (data || []).map(x=>ballById(x.id)).filter(Boolean);
@@ -1369,7 +1390,7 @@ function renderTalk(r, peek, fromBallId, seen, first) {
       if (peek && m.lock && !isUnlocked(m.lock)) {
         if (opened) flushBlock();
         if (block && block.lockId !== m.lock) flushBlock();
-        block = block || { lockId: m.lock, n: 0 }; block.n++; prevFrom = null; continue;
+        block = block || { lockId: m.lock, n: 0 }; block.n += (m.hiddenN || 1); prevFrom = null; continue;
       }
       if (peek && m.lock && isUnlocked(m.lock)) {
         if (block) flushBlock();
@@ -1531,16 +1552,20 @@ function openIAP(itemId) {
       <div class="note">テスト版の疑似購入です。実際の支払いは発生しません。</div>
       <button class="pay" data-pay>購入する（テスト）</button>`;
     const pay = inner.querySelector('[data-pay]');
-    pay.onclick = () => {
+    pay.onclick = async () => {
       if (pay.dataset.busy) return; pay.dataset.busy = 1;
       pay.innerHTML = '<span class="spinner"></span>';
-      setTimeout(() => {
+      if (LIVE) {
+        const {error}=await SB.rpc('fake_purchase',{p_item:itemId});
+        if (error){toast('疑似購入できませんでした: '+error.message);delete pay.dataset.busy;pay.textContent='購入する（テスト）';return;}
+        await remoteSync();
+      } else {
         const a = acct();
         if (it.pack) a[it.pack.kind === 'mood' ? 'moodPt' : 'postPt'] += it.pack.amount; else a.items[itemId]++;
         save();
-        pay.classList.add('done'); pay.innerHTML = `<span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>完了</span>`;
-        setTimeout(() => { closeLayer(L); toast(`${it.name}を手に入れました`, 'check'); refresh(); }, 750);
-      }, 1100);
+      }
+      pay.classList.add('done'); pay.innerHTML = `<span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>完了</span>`;
+      setTimeout(() => { closeLayer(L); toast(`${it.name}を手に入れました`, 'check'); refresh(); }, 600);
     };
   });
 }
@@ -1669,6 +1694,7 @@ function flyBalls(balls) {
    ===================================================================== */
 function renderChats() {
   const el = $('#chats');
+  if (!signedIn()) { el.innerHTML = `<h1 class="title">チャット</h1><div class="card" style="padding:22px;text-align:center"><p>気になる玉をひらいて、誰かに話しかけたら、ここにふたりのDMが並びます。</p><p class="muted small">のぞき見は登録不要。あなたのDMを始めるときだけ登録してください。</p><button class="btn hydra block" data-act="authPrompt">登録・ログイン</button></div>`; return; }
   const rooms = S.rooms.filter(r => inRoom(r)).sort((a, b) => lastAt(b) - lastAt(a));
   el.innerHTML = `<h1 class="title">チャット</h1>
     <p class="small muted" style="margin:-8px 2px 14px">直接は始められません。ワールドの玉から話しかけると、ここに並びます</p>
@@ -1682,7 +1708,9 @@ function renderChats() {
 }
 let resetArm = 0;
 function renderMe() {
-  const el = $('#me'), u = user(me()), a = acct();
+  const el=$('#me');
+  if(!signedIn()) { el.innerHTML = `<h1 class="title">マイページ</h1><div class="card" style="padding:24px 20px;text-align:center"><div class="orb" style="width:65px;height:65px;margin:0 auto 12px"></div><h2 style="font-family:var(--mincho);font-weight:500">まずは、この世界をのぞいてみて。</h2><p class="small muted">玉や他の人のトークは登録しなくても読めます。<br>玉を投げたり、誰かと会話するときに登録すれば大丈夫。</p><button class="btn hydra block" data-act="authPrompt">登録・ログイン</button></div>`;return;}
+  const u = user(me()), a = acct();
   const balls = S.balls.filter(b => b.owner === me()).sort((x, y) => y.at - x.at);
   const posts = S.posts.filter(p => p.owner === me()).sort((x, y) => y.at - x.at);
   const meter = (k, v, max, unit) => `<div class="card meter"><div class="k">${k}</div><div class="v">${v}<small>${unit}</small></div><div class="bar"><i style="width:${clamp(v / max * 100, 0, 100)}%"></i></div></div>`;
@@ -1770,7 +1798,8 @@ const ACT = {
   reloadFollow: () => reloadWorld(followWorld, '[data-act="reloadFollow"]'),
   worldTop: d => (d.w === 'follow' ? followWorld : mainWorld).toTop(),
   hideHint: () => { S.hintDone = true; save(); $('#hint').hidden = true; },
-  compose: () => { closeAll(); openComposer(); },
+  compose: () => { if(!promptAuth('玉を投げる'))return; closeAll(); openComposer(); },
+  authPrompt: () => promptAuth(),
   close: () => closeLayer(),
   profile: d => openProfile(d.id),
   ball: d => openBall(d.id),
@@ -1779,12 +1808,12 @@ const ACT = {
   like: async d => {if(LIVE){const liked=postById(d.id)?.likes.includes(me());const res=liked?await SB.from('post_likes').delete().eq('post_id',d.id).eq('user_id',me()):await SB.from('post_likes').insert({post_id:d.id,user_id:me()});if(res.error){toast(res.error.message);return;}await remoteSync();return;} const p = postById(d.id), i = p.likes.indexOf(me()); i >= 0 ? p.likes.splice(i, 1) : p.likes.push(me()); save(); refresh(); },
   follow: async d => {if(LIVE){const following=user(me()).following.includes(d.id);const res=following?await SB.from('follows').delete().eq('follower',me()).eq('followee',d.id):await SB.from('follows').insert({follower:me(),followee:d.id});if(res.error){toast(res.error.message);return;}await remoteSync();followDirty=true;refresh();return;}
     const f=user(me()).following,i=f.indexOf(d.id);i>=0?f.splice(i,1):f.push(d.id);followDirty=true;save();refresh();},
-  lockPick: d => LIVE ? toast('錠と鍵はデモ版のみ。オンラインではすべての会話が公開されます') : openLockPicker(d.id),
-  useLock: d => { if (useLock(roomById(d.room), d.kind)) { closeLayer(); toast(`${CONFIG.locks[d.kind].name}をかけました。ここからの会話は第三者から隠れます`); refresh(); worlds.forEach(w => w.wake()); } },
-  keyPick: d => LIVE ? toast('鍵はデモ版のみ対応です') : openKeyPicker(d.room, d.lock),
-  useKey: d => { if (useKey(d.lock, d.kind)) { closeLayer(); toast('開けました。中身はあなたにだけ見えています', 'check'); refresh(); } },
+  lockPick: d => openLockPicker(d.id),
+  useLock: async d => { if (await useLock(roomById(d.room), d.kind)) { closeLayer(); toast(`${CONFIG.locks[d.kind].name}をかけました。ここからの会話は第三者から隠れます`); refresh(); worlds.forEach(w => w.wake()); } },
+  keyPick: d => openKeyPicker(d.room, d.lock),
+  useKey: async d => { if (await useKey(d.lock, d.kind)) { closeLayer(); toast('開けました。中身はあなたにだけ見えています', 'check'); refresh(); } },
   buy: d => openIAP(d.item),
-  shop: () => LIVE ? toast('疑似課金は /demo.html で試せます') : openShop(),
+  shop: () => openShop(),
   logout: async () => { if(SB) await SB.auth.signOut();location.reload(); },
   editProfile: () => openEditProfile(),
   postNew: async () => { const ta=$('#me .np');const v=ta.value.trim();if(!v){ta.focus();return;}
@@ -1802,6 +1831,9 @@ const ACT = {
 };
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-act]');
+  if(t && !signedIn() && ['startTalk','like','follow','lockPick','useLock','keyPick','useKey','buy','shop','editProfile','postNew','throwPost'].includes(t.dataset.act)){
+    e.preventDefault();promptAuth(t.dataset.act==='startTalk'?'話しかける':t.dataset.act==='postNew'?'投稿する':t.dataset.act==='like'?'いいねする':t.dataset.act==='follow'?'フォローする':'この操作');return;
+  }
   if (t && ACT[t.dataset.act]) { e.preventDefault(); ACT[t.dataset.act](t.dataset, t); return; }
   const tb = e.target.closest('nav.tabs [data-tab]'); if (tb) setTab(tb.dataset.tab);
 });
@@ -1810,11 +1842,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && layers.len
 // Live snapshot is the only source of truth for shared messages.
 function dayStartUTC(){const t=new Date(Date.now()+9*3600000-4*3600000);t.setUTCHours(0,0,0,0);return t.getTime()-9*3600000+4*3600000;}
 async function remoteSync(){
- if(!authUid||!SB)return;
+ if(!SB)return;
  if(loadingRemote){queuedRemote=true;return;}
  loadingRemote=true;
  try{
-   const [profiles,balls,posts,rooms,segments,messages,likes,follows]=await Promise.all([
+   const [profiles,balls,posts,rooms,segments,messages,likes,follows,locks,inventory,credits,unlocks]=await Promise.all([
      SB.from('profiles').select('*').limit(500),
      SB.from('balls').select('*').order('created_at',{ascending:false}).limit(180),
      SB.from('posts').select('*').order('created_at',{ascending:false}).limit(200),
@@ -1822,15 +1854,19 @@ async function remoteSync(){
      SB.from('segments').select('*').order('created_at',{ascending:false}).limit(400),
      SB.from('messages').select('*').order('created_at',{ascending:false}).limit(1200),
      SB.from('post_likes').select('post_id,user_id').limit(3000),
-     SB.from('follows').select('followee').eq('follower',authUid).limit(300)
+     signedIn()?SB.from('follows').select('followee').eq('follower',authUid).limit(300):Promise.resolve({data:[]}),
+     SB.from('chat_locks').select('*').order('created_at',{ascending:false}).limit(600),
+     signedIn()?SB.from('inventory').select('item_id,qty').eq('user_id',authUid):Promise.resolve({data:[]}),
+     signedIn()?SB.from('point_credits').select('kind,balance').eq('user_id',authUid):Promise.resolve({data:[]}),
+     signedIn()?SB.from('chat_unlocks').select('lock_id').eq('user_id',authUid):Promise.resolve({data:[]})
    ]);
-   const errors=[profiles,balls,posts,rooms,segments,messages,likes,follows].filter(x=>x.error).map(x=>x.error.message);
+   const errors=[profiles,balls,posts,rooms,segments,messages,likes,follows,locks,inventory,credits,unlocks].filter(x=>x.error).map(x=>x.error.message);
    if(errors.length)throw new Error(errors.join(' / '));
    const myFollows=(follows.data||[]).map(f=>f.followee);
    const users={};(profiles.data||[]).forEach(p=>users[p.id]={id:p.id,name:p.name,handle:p.name+'_'+p.id.slice(0,4),gender:p.gender||'o',hue:hash(p.id)%360,bio:'',following:p.id===authUid?myFollows:[]});
-   if(!users[authUid]){users[authUid]={id:authUid,name:'あなた',handle:'you',gender:'o',hue:190,bio:'',following:myFollows};}
+   if(!users[authUid]){users[authUid]={id:authUid,name:signedIn()?'あなた':'ゲスト',handle:'guest',gender:'o',hue:190,bio:'',following:myFollows};}
    const postList=(posts.data||[]).map(p=>({id:p.id,owner:p.owner,text:p.body,at:Date.parse(p.created_at),likes:(likes.data||[]).filter(l=>l.post_id===p.id).map(l=>l.user_id),likeBase:0}));
-   const ballList=(balls.data||[]).map(b=>({id:b.id,owner:b.owner,type:b.kind,text:b.text||'',postId:b.post_id,color:b.color,pt:b.points,rainbow:false,at:Date.parse(b.created_at)}));
+   const ballList=(balls.data||[]).map(b=>({id:b.id,owner:b.owner,type:b.kind,text:b.text||'',postId:b.post_id,color:b.color,pt:b.points,rainbow:!!b.rainbow,at:Date.parse(b.created_at)}));
    const roomList=(rooms.data||[]).map(r=>({id:r.id,a:r.user_a,b:r.user_b,segments:[],live:[],lastMessageAt:Date.parse(r.last_message_at)}));
    const byRoom=new Map(roomList.map(r=>[r.id,r]));
    const bySeg=new Map();
@@ -1838,15 +1874,35 @@ async function remoteSync(){
      const r=byRoom.get(seg.room_id);if(!r)return;
      const s={id:seg.id,ballId:seg.ball_id,starter:seg.started_by,at:Date.parse(seg.created_at),messages:[],locks:[]};r.segments.push(s);bySeg.set(s.id,s);
    });
-   (messages.data||[]).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at)).forEach(m=>{
-     const seg=bySeg.get(m.segment_id);if(seg)seg.messages.push({id:m.id,from:m.sender_id,text:m.body,at:Date.parse(m.created_at),lock:null});
+   const unlockedIds=new Set((unlocks.data||[]).map(x=>x.lock_id));
+   (locks.data||[]).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at)).forEach(l=>{
+     const seg=bySeg.get(l.segment_id);if(!seg)return;
+     seg.locks.push({id:l.id,kind:l.kind,by:l.owner,at:Date.parse(l.created_at),exp:Date.parse(l.expires_at),messageCount:l.message_count});
    });
+   const visibleCounts={};
+   (messages.data||[]).sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at)).forEach(m=>{
+     const seg=bySeg.get(m.segment_id);if(seg){seg.messages.push({id:m.id,from:m.sender_id,text:m.body,at:Date.parse(m.created_at),lock:m.lock_id});if(m.lock_id)visibleCounts[m.lock_id]=(visibleCounts[m.lock_id]||0)+1;}
+   });
+   // Hidden bodies are never returned by the database. Render a count-only placeholder.
+   for(const r of roomList)for(const seg of r.segments)for(const lk of seg.locks){
+     if(r.a!==authUid&&r.b!==authUid&&!unlockedIds.has(lk.id)){
+       const hidden=Math.max(0,(lk.messageCount||0)-(visibleCounts[lk.id]||0));
+       if(hidden)seg.messages.push({id:'hidden_'+lk.id,from:r.a,text:'',at:lk.at+1,lock:lk.id,hiddenN:hidden});
+     }
+     seg.messages.sort((a,b)=>a.at-b.at);
+   }
    const k=dayStartUTC(), mine=ballList.filter(b=>b.owner===authUid&&b.at>=k);
-   const moodUsed=mine.filter(b=>b.type==='mood').reduce((n,b)=>n+b.pt,0),postUsed=mine.filter(b=>b.type==='post').reduce((n,b)=>n+b.pt,0);
+   const moodUsed=mine.filter(b=>b.type==='mood').reduce((n,b)=>n+b.pt+(b.rainbow?100:0),0),postUsed=mine.filter(b=>b.type==='post').reduce((n,b)=>n+b.pt+(b.rainbow?100:0),0);
    const sendsUsed=(segments.data||[]).filter(x=>x.started_by===authUid&&Date.parse(x.created_at)>=k).length;
-   const prior=S?.acct?.[authUid];const account=newAcct();account.moodPt=Math.max(0,100-moodUsed);account.postPt=Math.max(0,100-postUsed);
+   const prior=S?.acct?.[authUid];const account=newAcct();
+   const creditMap=Object.fromEntries((credits.data||[]).map(c=>[c.kind,c.balance]));
+   account.moodPt=Math.max(0,100-moodUsed)+(creditMap.mood||0);
+   account.postPt=Math.max(0,100-postUsed)+(creditMap.post||0);
+   for(const it of (inventory.data||[]))account.items[it.item_id]=it.qty;
+   account.unlocked=[...unlockedIds];
    account.sends=Math.max(0,15-sendsUsed);account.read=prior?.read||{};
    S={v:1,timeOffset:0,current:authUid,accounts:[authUid],users,acct:{[authUid]:account},balls:ballList,posts:postList,rooms:roomList.filter(r=>r.segments.length),hintDone:true};
+   const emptyGuest=$('#emptyGuest'); if(emptyGuest)emptyGuest.hidden=ballList.length!==0;
    if(mainWorld){refresh();mainWorld.build(false);followDirty=true;}
  }catch(e){console.error('remoteSync',e);toast('同期エラー: '+e.message);}
  finally{loadingRemote=false;if(queuedRemote){queuedRemote=false;setTimeout(remoteSync,150);}}
@@ -1860,7 +1916,9 @@ function subscribeLive(){
  .on('postgres_changes',{event:'*',schema:'public',table:'messages'},()=>scheduleSync())
  .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>scheduleSync())
  .on('postgres_changes',{event:'*',schema:'public',table:'post_likes'},()=>scheduleSync())
- .on('postgres_changes',{event:'*',schema:'public',table:'follows'},()=>scheduleSync()).subscribe();
+ .on('postgres_changes',{event:'*',schema:'public',table:'follows'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'chat_locks'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'chat_unlocks'},()=>scheduleSync()).subscribe();
 }
 function scheduleSync(){clearTimeout(syncDebounce);syncDebounce=setTimeout(remoteSync,450);}
 let startedUI=false;
@@ -1872,9 +1930,28 @@ async function enterLive(session){
    const {error:e}=await SB.from('profiles').insert({id:authUid,name:name.slice(0,25)||'ユーザー',gender:'o'});
    if(e){$('#authError').textContent=e.message;return;}
  }
+ try {await SB.rpc('ensure_morning_ball');} catch(e){console.warn('morning ball',e);} 
  await remoteSync();
  if(!S){$('#authError').textContent='データを読み込めませんでした';return;}
- $('#authGate').hidden=true;document.body.classList.add('live');
+ $('#authGate').hidden=true;$('#guestEntry').hidden=signedIn();document.body.classList.add('live');
+ if(!startedUI){
+  startedUI=true;
+  mainWorld=new World($('#world-main'),{filter:()=>true,pullEl:$('#pull-main'),backEl:$('[data-act="worldTop"][data-w="main"]'),onTap:b=>openBall(b.id),onPull:()=>reloadWorld(),onBuilt:n=>$('#worldCount').textContent=`公開の玉　${n}`});
+  followWorld=new World($('#world-follow'),{filter:b=>user(me()).following.includes(b.owner),pullEl:$('#pull-follow'),backEl:$('[data-act="worldTop"][data-w="follow"]'),onTap:b=>openBall(b.id),onPull:()=>reloadWorld(followWorld,'[data-act="reloadFollow"]')});
+  worlds=[mainWorld,followWorld];mainWorld.setVisible(true);mainWorld.build(true);$('#hint').hidden=true;refresh();
+  if(document.fonts)document.fonts.ready.then(()=>{fontGen++;spriteCache.clear();worlds.forEach(w=>w.wake());});
+  subscribeLive();setInterval(remoteSync,12000);
+  // A new Tokyo day starts at 04:00; refreshing or leaving the app open both work.
+  let morningDay=dayKey(Date.now());
+  setInterval(async()=>{const k=dayKey(Date.now());if(k!==morningDay){morningDay=k;if(signedIn())await SB.rpc('ensure_morning_ball');await remoteSync();}},30000);
+ }else{refresh();if(mainWorld)mainWorld.build(false);}
+}
+async function enterGuest(){
+ authUid=GUEST_ID;
+ await remoteSync();
+ $('#authGate').hidden=true;$('#guestEntry').hidden=false;
+ document.body.classList.add('live');
+ if(!S){$('#guestEntry').textContent='読み込みに失敗しました。再読み込みしてください';return;}
  if(!startedUI){
   startedUI=true;
   mainWorld=new World($('#world-main'),{filter:()=>true,pullEl:$('#pull-main'),backEl:$('[data-act="worldTop"][data-w="main"]'),onTap:b=>openBall(b.id),onPull:()=>reloadWorld(),onBuilt:n=>$('#worldCount').textContent=`公開の玉　${n}`});
@@ -1894,14 +1971,19 @@ async function boot(){
     e.preventDefault();$('#authError').textContent='';const btn=$('#authSubmit');btn.disabled=true;btn.textContent='接続中…';
     try{const f=new FormData(e.target),email=String(f.get('email')).trim(),password=String(f.get('password'));
       if(signup){const name=String(f.get('name')||'').trim();if(!name)throw Error('表示名を入力してください');
-        const {data,error}=await SB.auth.signUp({email,password});if(error)throw error;
+        const {data,error}=await SB.auth.signUp({email,password,options:{emailRedirectTo:'https://tamacha.vercel.app/'}});if(error)throw error;
         if(data.user)localStorage.setItem('tamacha_name_'+data.user.id,name);
         if(data.session)await enterLive(data.session);
-        else $('#authError').textContent='確認メールを送信しました。メールのリンクを開いてからログインしてください。';
+        else $('#authError').textContent='確認メールを送信しました。届いたリンクを開いてください。リンクが開かない場合はSupabaseのURL設定を確認してください。';
       }else{const {data,error}=await SB.auth.signInWithPassword({email,password});if(error)throw error;await enterLive(data.session);}
     }catch(err){$('#authError').textContent=err.message;}finally{btn.disabled=false;btn.textContent=signup?'新規登録':'ログイン';}
   };
-  const {data:{session}}=await SB.auth.getSession();if(session)await enterLive(session);
+  $('#authClose').onclick=()=>{$('#authGate').hidden=true;};
+  const {data:{session}}=await SB.auth.getSession();
+  if(session)await enterLive(session);else await enterGuest();
+  // Supabase redirects authentication errors in the URL hash.
+  const params=new URLSearchParams(location.hash.replace(/^#/,''));
+  if(params.has('error_description')){$('#authError').textContent=params.get('error_description');$('#authGate').hidden=false;}
  }catch(e){console.error(e);$('#authError').textContent=e.message;}
 }
 boot();;
