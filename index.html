@@ -730,50 +730,8 @@ function ensureDaily(id = me()) {
 
 /* AIキャラクターの返信は安全なEdge Functionから作成。
    APIキーはブラウザに置かず、ユーザーの認証済みセッションで呼び出す。 */
-const botReplyPending = new Set();
-const botReplyTimers = new Map();
-const botReplyAgain = new Set();
-
-// A burst of short messages is one conversational turn, not one AI request per tap.
-function triggerBotReply(roomId) {
-  if (!LIVE || !SB || !signedIn() || !roomId) return;
-  const rr=roomById(roomId);
-  if (!rr) return;
-  const other=rr.a===authUid?rr.b:rr.a;
-  if (!S.users[other]?.isBot) return;
-  if (botReplyTimers.has(roomId)) clearTimeout(botReplyTimers.get(roomId));
-  botReplyTimers.set(roomId,setTimeout(()=>{
-    botReplyTimers.delete(roomId);
-    runBotReply(roomId);
-  },2400));
-}
-async function runBotReply(roomId) {
-  if (botReplyPending.has(roomId)) {
-    botReplyAgain.add(roomId);
-    return;
-  }
-  botReplyPending.add(roomId);
-  try {
-    const {data,error}=await SB.functions.invoke('bot-reply',{body:{room_id:roomId}});
-    if(error) {
-      console.warn('AI bot response failed',error);
-      toast('AIの返信を取得できませんでした。あとで再度話しかけてください');
-      return;
-    }
-    if(data?.error) {
-      console.warn('AI bot response:',data.error);
-      if(!data.obsolete)toast('AIの返信を取得できませんでした');
-      return;
-    }
-    if(data?.ok && !data?.obsolete) setTimeout(remoteSync,450);
-  } catch(e) {
-    console.warn('AI bot request failed',e);
-    toast('AIとの通信に失敗しました');
-  } finally {
-    botReplyPending.delete(roomId);
-    if(botReplyAgain.delete(roomId)) triggerBotReply(roomId);
-  }
-}
+// Replies are scheduled on the server whenever a human sends a message.
+// No browser timer is required: the AI can reply even if the app is closed.
 
 /* 玉から話しかける（1日15回の対象） */
 async function startTalkFromBall(ballId, text) {
@@ -781,7 +739,6 @@ async function startTalkFromBall(ballId, text) {
     const {data,error} = await SB.rpc('start_ball_chat',{p_ball:ballId,p_body:text});
     if(error) {toast(error.message.includes('15')?'本日の15回を使い切りました':error.message);return null;}
     await remoteSync();
-    triggerBotReply(data);
     return roomById(data);
   }
   const b = ballById(ballId), a = acct();
@@ -806,7 +763,6 @@ async function sendMessage(r, text) {
     const {error}=await SB.rpc('send_room_chat',{p_room:r.id,p_body:text});
     if(error){toast(error.message.includes('paused')?'3日経過したため玉から再開してください':error.message);return;}
     await remoteSync();
-    triggerBotReply(r.id);
     return;
   }
   const L = activeLock(r);
