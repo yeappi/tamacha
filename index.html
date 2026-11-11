@@ -441,7 +441,7 @@ body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
   </div></div>
   <div id="toast" role="status" aria-live="polite"></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.js"></script>
 <script>
 'use strict';
 const LIVE = true;
@@ -1776,8 +1776,9 @@ const ACT = {
   ball: d => openBall(d.id),
   openTalk: d => openTalk(d.id, d.ball),
   startTalk: d => { const b = ballById(d.id); const r = directOpenable(b); if (r) openTalk(r.id); else openStart(d.id); },
-  like: d => { if (LIVE) {toast('いいねの共有機能は次のアップデートで対応します');return;} const p = postById(d.id), i = p.likes.indexOf(me()); i >= 0 ? p.likes.splice(i, 1) : p.likes.push(me()); save(); refresh(); },
-  follow: d => { const f = user(me()).following, i = f.indexOf(d.id); i >= 0 ? f.splice(i, 1) : f.push(d.id); followDirty = true; save(); refresh(); },
+  like: async d => {if(LIVE){const liked=postById(d.id)?.likes.includes(me());const res=liked?await SB.from('post_likes').delete().eq('post_id',d.id).eq('user_id',me()):await SB.from('post_likes').insert({post_id:d.id,user_id:me()});if(res.error){toast(res.error.message);return;}await remoteSync();return;} const p = postById(d.id), i = p.likes.indexOf(me()); i >= 0 ? p.likes.splice(i, 1) : p.likes.push(me()); save(); refresh(); },
+  follow: async d => {if(LIVE){const following=user(me()).following.includes(d.id);const res=following?await SB.from('follows').delete().eq('follower',me()).eq('followee',d.id):await SB.from('follows').insert({follower:me(),followee:d.id});if(res.error){toast(res.error.message);return;}await remoteSync();followDirty=true;refresh();return;}
+    const f=user(me()).following,i=f.indexOf(d.id);i>=0?f.splice(i,1):f.push(d.id);followDirty=true;save();refresh();},
   lockPick: d => LIVE ? toast('錠と鍵はデモ版のみ。オンラインではすべての会話が公開されます') : openLockPicker(d.id),
   useLock: d => { if (useLock(roomById(d.room), d.kind)) { closeLayer(); toast(`${CONFIG.locks[d.kind].name}をかけました。ここからの会話は第三者から隠れます`); refresh(); worlds.forEach(w => w.wake()); } },
   keyPick: d => LIVE ? toast('鍵はデモ版のみ対応です') : openKeyPicker(d.room, d.lock),
@@ -1813,20 +1814,22 @@ async function remoteSync(){
  if(loadingRemote){queuedRemote=true;return;}
  loadingRemote=true;
  try{
-   const [profiles,balls,posts,rooms,segments,messages]=await Promise.all([
+   const [profiles,balls,posts,rooms,segments,messages,likes,follows]=await Promise.all([
      SB.from('profiles').select('*').limit(500),
      SB.from('balls').select('*').order('created_at',{ascending:false}).limit(180),
      SB.from('posts').select('*').order('created_at',{ascending:false}).limit(200),
      SB.from('rooms').select('*').order('last_message_at',{ascending:false}).limit(150),
      SB.from('segments').select('*').order('created_at',{ascending:false}).limit(400),
-     SB.from('messages').select('*').order('created_at',{ascending:false}).limit(1200)
+     SB.from('messages').select('*').order('created_at',{ascending:false}).limit(1200),
+     SB.from('post_likes').select('post_id,user_id').limit(3000),
+     SB.from('follows').select('followee').eq('follower',authUid).limit(300)
    ]);
-   const errors=[profiles,balls,posts,rooms,segments,messages].filter(x=>x.error).map(x=>x.error.message);
+   const errors=[profiles,balls,posts,rooms,segments,messages,likes,follows].filter(x=>x.error).map(x=>x.error.message);
    if(errors.length)throw new Error(errors.join(' / '));
-   let follows=[];try{follows=JSON.parse(localStorage.getItem('tamacha_follow_'+authUid)||'[]')}catch(e){}
-   const users={};(profiles.data||[]).forEach(p=>users[p.id]={id:p.id,name:p.name,handle:p.name+'_'+p.id.slice(0,4),gender:p.gender||'o',hue:hash(p.id)%360,bio:'',following:p.id===authUid?follows:[]});
-   if(!users[authUid]){users[authUid]={id:authUid,name:'あなた',handle:'you',gender:'o',hue:190,bio:'',following:follows};}
-   const postList=(posts.data||[]).map(p=>({id:p.id,owner:p.owner,text:p.body,at:Date.parse(p.created_at),likes:[],likeBase:0}));
+   const myFollows=(follows.data||[]).map(f=>f.followee);
+   const users={};(profiles.data||[]).forEach(p=>users[p.id]={id:p.id,name:p.name,handle:p.name+'_'+p.id.slice(0,4),gender:p.gender||'o',hue:hash(p.id)%360,bio:'',following:p.id===authUid?myFollows:[]});
+   if(!users[authUid]){users[authUid]={id:authUid,name:'あなた',handle:'you',gender:'o',hue:190,bio:'',following:myFollows};}
+   const postList=(posts.data||[]).map(p=>({id:p.id,owner:p.owner,text:p.body,at:Date.parse(p.created_at),likes:(likes.data||[]).filter(l=>l.post_id===p.id).map(l=>l.user_id),likeBase:0}));
    const ballList=(balls.data||[]).map(b=>({id:b.id,owner:b.owner,type:b.kind,text:b.text||'',postId:b.post_id,color:b.color,pt:b.points,rainbow:false,at:Date.parse(b.created_at)}));
    const roomList=(rooms.data||[]).map(r=>({id:r.id,a:r.user_a,b:r.user_b,segments:[],live:[],lastMessageAt:Date.parse(r.last_message_at)}));
    const byRoom=new Map(roomList.map(r=>[r.id,r]));
@@ -1855,7 +1858,9 @@ function subscribeLive(){
  .on('postgres_changes',{event:'*',schema:'public',table:'rooms'},()=>scheduleSync())
  .on('postgres_changes',{event:'*',schema:'public',table:'segments'},()=>scheduleSync())
  .on('postgres_changes',{event:'*',schema:'public',table:'messages'},()=>scheduleSync())
- .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>scheduleSync()).subscribe();
+ .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'post_likes'},()=>scheduleSync())
+ .on('postgres_changes',{event:'*',schema:'public',table:'follows'},()=>scheduleSync()).subscribe();
 }
 function scheduleSync(){clearTimeout(syncDebounce);syncDebounce=setTimeout(remoteSync,450);}
 let startedUI=false;
