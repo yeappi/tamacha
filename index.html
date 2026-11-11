@@ -398,7 +398,7 @@ body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
   <!-- わーるど -->
   <section class="screen on" id="scr-world">
     <div class="world" id="world-main"></div>
-    <div id="emptyGuest" hidden style="position:absolute;left:22px;right:22px;top:38%;z-index:4;text-align:center;background:rgba(228,235,242,.72);padding:24px 17px;border-radius:24px;box-shadow:0 10px 32px -20px rgba(0,0,0,.5);backdrop-filter:blur(18px)"><div style="font-family:var(--mincho);font-size:20px;letter-spacing:.06em">ここに、誰かの気持ちが降ってくる。</div><p class="small" style="line-height:1.75">まだ玉がありません。<br>サンプルの世界で、玉と会話をのぞいてみよう。</p><a href="/demo.html" class="btn hydra" style="text-decoration:none">サンプルの世界を見てみる</a></div>
+    <div id="emptyGuest" hidden style="position:absolute;left:22px;right:22px;top:38%;z-index:4;text-align:center;background:rgba(228,235,242,.72);padding:24px 17px;border-radius:24px;box-shadow:0 10px 32px -20px rgba(0,0,0,.5);backdrop-filter:blur(18px)"><div style="font-family:var(--mincho);font-size:20px;letter-spacing:.06em">ここに、誰かの気持ちが降ってくる。</div><p class="small" style="line-height:1.75">まだ玉がありません。<br>しばらくしてから更新するか、玉を投げてみよう。</p><button class="btn hydra" data-act="reload">更新する</button></div>
     <div class="topbar">
       <div class="wordmark">こちゃ<small id="worldCount"></small></div>
       <button class="iconbtn" data-act="reload" aria-label="ワールドを更新"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg></button>
@@ -740,12 +740,12 @@ async function triggerBotReply(roomId) {
     const {data,error}=await SB.functions.invoke('bot-reply',{body:{room_id:roomId}});
     if (error) {
       console.warn('AI bot temporarily unavailable:',error);
-      toast('AIの返信がまだ使えません。Gemini APIキーを確認してください');
+      toast('AI返信に失敗しました。少ししてからもう一度お試しください');
       return;
     }
     if (data?.error) {
       console.warn('AI bot:',data.error);
-      toast('AI返信の準備ができていません');
+      toast('AI返信に失敗しました。少ししてからもう一度お試しください');
       return;
     }
     setTimeout(remoteSync,500);
@@ -1766,19 +1766,6 @@ function renderMe() {
     <div class="card" style="padding:16px">
       <div class="small" style="font-weight:500;margin-bottom:10px">アカウントを切り替える</div>
       ${S.accounts.map(id => `<button class="acct ${id === me() ? 'on' : ''}" data-act="switchAcct" data-id="${id}">${avatar(id, 36)}<span class="grow"><b style="font-weight:500">${esc(user(id).name)}</b><span class="small muted" style="display:block">${id === 'u_me' ? 'メインのアカウント' : '第三者としてのぞき見するためのアカウント'}</span></span>${id === me() ? '<span class="chip">使用中</span>' : ''}</button>`).join('')}
-      <div class="small" style="font-weight:500;margin:16px 0 4px">時間を進める</div>
-      <p class="small muted" style="margin:0 0 10px">いまの時刻 ${md(now())} ${hm(now())}${S.timeOffset ? '（進めています）' : ''}。錠の有効時間、3日の休止、朝4:00のリセットを試せます</p>
-      <div class="tools"><button class="btn small ghost" data-act="time" data-ms="${30 * M}">＋30分</button><button class="btn small ghost" data-act="time" data-ms="${3 * H}">＋3時間</button><button class="btn small ghost" data-act="time" data-ms="${D}">＋1日</button>${S.timeOffset ? '<button class="btn small ghost" data-act="timeReset">現在に戻す</button>' : ''}</div>
-      <div class="small" style="font-weight:500;margin:18px 0 6px">ためしてみる</div>
-      <ol class="guide">
-        <li>わーるどで「ひま」の玉をひらき、3つのトークをのぞく</li>
-        <li>あおいとみなとのトークで、古びた錠の区間を見つける</li>
-        <li>ショップで普通の鍵を買い、その区間を開ける</li>
-        <li>こはるで古びた錠を買い、りんかとのトークで錠をかけて話す</li>
-        <li>ひよりに切り替え、こはるの「話したい」の玉からのぞく</li>
-        <li>真ん中の水晶玉から玉をつくって投げ、わーるどを更新する</li>
-      </ol>
-      <div class="tools" style="margin-top:16px"><button class="btn small ghost" data-act="resetData" style="color:#B5574B">${resetArm > Date.now() ? 'もう一度押すと初期化します' : 'データを初期化'}</button></div>
     </div></div>`;
   const g = el.querySelector('#myBalls'); balls.forEach(b => g.appendChild(miniBallBtn(b)));
   if (!balls.length) g.outerHTML = '<p class="muted small">まだ玉はありません。真ん中の水晶玉から投げてみよう</p>';
@@ -1857,10 +1844,6 @@ const ACT = {
   switchAcct: d => { if (LIVE) return; if (d.id === me()) return; S.current = d.id; ensureDaily(d.id); save(); closeAll(); followDirty = true; refresh(); toast(`${user(d.id).name}に切り替えました`); },
   time: d => { S.timeOffset += +d.ms; ensureDaily(); save(); refresh(); mainWorld.build(false); followDirty = true; toast(`時間を進めました（${md(now())} ${hm(now())}）`); },
   timeReset: () => { S.timeOffset = 0; save(); refresh(); mainWorld.build(false); followDirty = true; toast('現在の時刻に戻しました'); },
-  resetData: () => {
-    if (resetArm > Date.now()) { try { localStorage.removeItem(STORE_KEY); } catch (e) { } S = seed(); ensureDaily(); save(); resetArm = 0; closeAll(); spriteCache.clear(); refresh(); mainWorld.build(true); followDirty = true; setTab('world'); toast('最初の状態に戻しました'); }
-    else { resetArm = Date.now() + 3000; renderMe(); setTimeout(renderMe, 3100); }
-  },
 };
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-act]');
