@@ -18,24 +18,41 @@ Deno.serve(async (req: Request) => {
   if (!apiUrl || !adminKey) return reply({ error: "Backend is not configured" }, 503);
   if (!geminiKey) return reply({ error: "GEMINI_API_KEY is not configured in Supabase Edge Function Secrets" }, 503);
 
-  const authHeader = req.headers.get("Authorization") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token || token === authHeader) return reply({ error: "Please sign in" }, 401);
+  // The browser only schedules replies via message inserts. Actual generation
+  // runs from pg_cron, authenticated with a private Vault token.
   const db = createClient(apiUrl, adminKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: userData, error: authError } = await db.auth.getUser(token);
-  if (authError || !userData.user) return reply({ error: "Invalid session" }, 401);
-  const humanId = userData.user.id;
-
+  const workerToken = req.headers.get("x-tamacha-worker-token");
+  const isWorker = !!workerToken;
+  if(isWorker) {
+    const {data:trusted,error:checkError}=await db.rpc("verify_tamacha_bot_worker",{p_secret:workerToken});
+    if(checkError || trusted!==true) return reply({error:"Worker not authorized"},403);
+  } else {
+    const authHeader=req.headers.get("Authorization")||"";
+    const token=authHeader.replace(/^Bearer\s+/i,"");
+    if(!token || token===authHeader) return reply({error:"Please sign in"},401);
+    const {data:userData,error:authError}=await db.auth.getUser(token);
+    if(authError || !userData.user) return reply({error:"Invalid session"},401);
+    // Verified users still schedule through the secure database trigger, not direct generation.
+    return reply({ok:true,scheduled:true});
+  }
   let roomId = "";
+  let expectedSource = "";
   try {
-    const body = await req.json();
-    roomId = String(body?.room_id || "");
-    if (!/^[0-9a-f-]{36}$/i.test(roomId)) return reply({ error: "Invalid room" }, 400);
-  } catch { return reply({ error: "Invalid JSON" }, 400); }
-
+    const body=await req.json();
+    roomId=String(body?.room_id||"");
+    expectedSource=String(body?.source_message||"");
+    if(!/^[0-9a-f-]{36}$/i.test(roomId) || !/^[0-9a-f-]{36}$/i.test(expectedSource))
+      return reply({error:"Invalid scheduled reply"},400);
+  } catch { return reply({error:"Invalid JSON"},400); }
+  const {data:scheduled,error:scheduledError}=await db.from("bot_reply_schedule")
+    .select("source_message").eq("room_id",roomId).maybeSingle();
+  if(scheduledError) return reply({error:"Schedule unavailable"},503);
+  if(!scheduled || scheduled.source_message!==expectedSource) return reply({ok:true,obsolete:true});
   const { data: room, error: roomErr } = await db.from("rooms").select("id,user_a,user_b").eq("id",roomId).maybeSingle();
-  if (roomErr || !room || (room.user_a !== humanId && room.user_b !== humanId)) return reply({ error: "Room unavailable" }, 403);
-  const botId = room.user_a === humanId ? room.user_b : room.user_a;
+  if (roomErr || !room) return reply({ error: "Room unavailable" }, 403);
+  const {data:botA}=await db.from("bot_personas").select("user_id").eq("user_id",room.user_a).maybeSingle();
+  const botId=botA ? room.user_a : room.user_b;
+  const humanId=botId===room.user_a ? room.user_b : room.user_a;
   const { data: persona, error: personaError } = await db.from("bot_personas").select("persona").eq("user_id",botId).maybeSingle();
   if (personaError || !persona) return reply({ error: "This room has no AI test participant" }, 400);
   const { data: humanProfile } = await db.from("profiles").select("name").eq("id",humanId).maybeSingle();
@@ -44,6 +61,7 @@ Deno.serve(async (req: Request) => {
     .eq("room_id",roomId).order("created_at",{ascending:false}).order("id",{ascending:false}).limit(24);
   if (messagesError || !lastMessages?.length) return reply({ error: "No message to answer" }, 400);
   const source = lastMessages[0];
+  if(source.id!==expectedSource) return reply({ok:true,obsolete:true});
   if (source.sender_id !== humanId) return reply({ ok: true, already_replied: true });
   const { error: claimError } = await db.from("ai_reply_jobs").insert({ source_message: source.id });
   if (claimError) {
@@ -204,6 +222,9 @@ Deno.serve(async (req: Request) => {
       return reply({ error:"AI reply could not be saved" },503);
     }
     committed = true;
+    const {error:clearError}=await db.from("bot_reply_schedule").delete()
+      .eq("room_id",roomId).eq("source_message",source.id);
+    if(clearError) console.warn("Schedule cleanup error",clearError.message);
     return reply({ok:true, action, count:inserted, quiet:safeMsgs.length===0});
   } catch (error) {
     console.error("AI reply error", String(error).slice(0,300));
