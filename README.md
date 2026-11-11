@@ -49,3 +49,15 @@ Live app: https://tamacha.vercel.app
 - The API uses RLS on every exposed table.
 - All three RPC functions intentionally run with elevated DB rights but explicitly validate `auth.uid()`, allowed participants, daily quota, and sender identity.
 - No row in the MVP database represents a private or locked message.
+
+## AI conversation testers (20 profiles)
+
+- 10 masculine and 10 feminine fictional bot accounts are seeded into Supabase with an initial mood ball each.
+- Every AI profile has its own back-end persona; bots reply only to human messages directed to them, not to each other.
+- `supabase/functions/bot-reply/index.ts` is deployed as Edge Function `bot-reply`.
+- The frontend calls `bot-reply` only after a successfully authenticated human sends to a bot.
+- `bot_reply_claims` prevents repeated replies to the same message, and the function checks participant identity and the most recent message.
+- **To turn on Gemini:** In Supabase Dashboard → Edge Functions → Secrets, add secret `GEMINI_API_KEY` with a key from Google AI Studio. Do not put the key in the HTML, GitHub, or the chat.
+- The default model is `gemini-3.1-flash-lite`. To override, set optional secret `GEMINI_MODEL` to an API-accessible model.
+- While the secret is unset, the 20 profiles and balls appear normally, but AI messages cannot be generated. The client shows an explanatory notice.
+- Demo is not intended for public unmoderated rollout; let test participants know fictional AI accounts are present. Don't send confidential/private info to a free-tier model.
