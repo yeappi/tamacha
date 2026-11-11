@@ -726,12 +726,43 @@ function ensureDaily(id = me()) {
   return true;
 }
 
+/* AIキャラクターの返信は安全なEdge Functionから作成。
+   APIキーはブラウザに置かず、ユーザーの認証済みセッションで呼び出す。 */
+const botReplyPending = new Set();
+async function triggerBotReply(roomId) {
+  if (!LIVE || !SB || !signedIn() || !roomId || botReplyPending.has(roomId)) return;
+  const rr=roomById(roomId);
+  if (!rr) return;
+  const other=rr.a===authUid?rr.b:rr.a;
+  if (!S.users[other]?.isBot) return;
+  botReplyPending.add(roomId);
+  try {
+    const {data,error}=await SB.functions.invoke('bot-reply',{body:{room_id:roomId}});
+    if (error) {
+      console.warn('AI bot temporarily unavailable:',error);
+      toast('AIの返信がまだ使えません。Gemini APIキーを確認してください');
+      return;
+    }
+    if (data?.error) {
+      console.warn('AI bot:',data.error);
+      toast('AI返信の準備ができていません');
+      return;
+    }
+    setTimeout(remoteSync,500);
+  } catch(e) {
+    console.warn('AI bot request failed',e);
+    toast('AIの返信に接続できませんでした');
+  } finally { botReplyPending.delete(roomId); }
+}
+
 /* 玉から話しかける（1日15回の対象） */
 async function startTalkFromBall(ballId, text) {
   if (LIVE) {
     const {data,error} = await SB.rpc('start_ball_chat',{p_ball:ballId,p_body:text});
     if(error) {toast(error.message.includes('15')?'本日の15回を使い切りました':error.message);return null;}
-    await remoteSync(); return roomById(data);
+    await remoteSync();
+    triggerBotReply(data);
+    return roomById(data);
   }
   const b = ballById(ballId), a = acct();
   if (a.sends <= 0) return null;
@@ -754,7 +785,9 @@ async function sendMessage(r, text) {
   if (LIVE) {
     const {error}=await SB.rpc('send_room_chat',{p_room:r.id,p_body:text});
     if(error){toast(error.message.includes('paused')?'3日経過したため玉から再開してください':error.message);return;}
-    await remoteSync();return;
+    await remoteSync();
+    triggerBotReply(r.id);
+    return;
   }
   const L = activeLock(r);
   const m = { id: uid('m'), from: me(), text, at: now(), lock: L ? L.id : null };
@@ -1863,7 +1896,7 @@ async function remoteSync(){
    const errors=[profiles,balls,posts,rooms,segments,messages,likes,follows,locks,inventory,credits,unlocks].filter(x=>x.error).map(x=>x.error.message);
    if(errors.length)throw new Error(errors.join(' / '));
    const myFollows=(follows.data||[]).map(f=>f.followee);
-   const users={};(profiles.data||[]).forEach(p=>users[p.id]={id:p.id,name:p.name,handle:p.name+'_'+p.id.slice(0,4),gender:p.gender||'o',hue:hash(p.id)%360,bio:'',following:p.id===authUid?myFollows:[]});
+   const users={};(profiles.data||[]).forEach(p=>users[p.id]={id:p.id,name:p.name,handle:p.name+'_'+p.id.slice(0,4),gender:p.gender||'o',hue:hash(p.id)%360,bio:p.bio||'',isBot:!!p.is_bot,following:p.id===authUid?myFollows:[]});
    if(!users[authUid]){users[authUid]={id:authUid,name:signedIn()?'あなた':'ゲスト',handle:'guest',gender:'o',hue:190,bio:'',following:myFollows};}
    const postList=(posts.data||[]).map(p=>({id:p.id,owner:p.owner,text:p.body,at:Date.parse(p.created_at),likes:(likes.data||[]).filter(l=>l.post_id===p.id).map(l=>l.user_id),likeBase:0}));
    const ballList=(balls.data||[]).map(b=>({id:b.id,owner:b.owner,type:b.kind,text:b.text||'',postId:b.post_id,color:b.color,pt:b.points,rainbow:!!b.rainbow,at:Date.parse(b.created_at)}));
