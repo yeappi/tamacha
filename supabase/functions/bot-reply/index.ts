@@ -131,22 +131,41 @@ Deno.serve(async (req: Request) => {
       required:["action","messages","memory"]
     };
     const model = Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash-lite";
-    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: guide }] }],
-        generationConfig: {
-          temperature:0.94, maxOutputTokens:1050,
-          responseMimeType:"application/json", responseSchema:replySchema
-        }
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("Gemini API failed:", response.status, err.slice(0,400));
-      return reply({ error: response.status === 429 ? "AI free tier rate limit reached" : "AI model request failed", status: response.status }, 503);
+    // Google's Gemini endpoint intermittently returns 503 during demand spikes.
+    // Retry only transient upstream errors, with modest backoff; 429 may indicate a hard quota.
+    let response: Response | null = null;
+    for(let attempt=0;attempt<3;attempt++) {
+      try {
+        response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: guide }] }],
+            generationConfig: {
+              temperature:0.94, maxOutputTokens:1050,
+              responseMimeType:"application/json", responseSchema:replySchema
+            }
+          }),
+          signal: AbortSignal.timeout(22000),
+        });
+      } catch (err) {
+        if(attempt===2) throw err;
+        console.warn("Gemini temporary network/timeout failure, retry",attempt+1);
+        await new Promise(resolve=>setTimeout(resolve,1200*(attempt+1)));
+        continue;
+      }
+      if(response.ok) break;
+      if(![502,503,504].includes(response.status) || attempt===2) break;
+      console.warn("Gemini overloaded, retrying after backoff",response.status,attempt+1);
+      await response.body?.cancel().catch(()=>{});
+      await new Promise(resolve=>setTimeout(resolve,1200*(attempt+1)));
+    }
+    if (!response || !response.ok) {
+      const status=response?.status||503;
+      const err=response?await response.text():"No response from Gemini";
+      console.error("Gemini API failed:",status,err.slice(0,400));
+      return reply({ error: status===429 ? "AI free tier rate limit reached" :
+        status===503 ? "Gemini is temporarily busy" : "AI model request failed", status },503);
     }
     const result = await response.json();
     const raw = (result?.candidates?.[0]?.content?.parts || [])
