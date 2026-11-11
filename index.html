@@ -698,6 +698,8 @@ function lastAt(r) { const m = allMsgs(r); return m.length ? m[m.length - 1].at 
 const isPaused = r => now() - lastAt(r) > CONFIG.dmPauseMs;
 const segHasLock = s => s.locks.length > 0;
 const segsFromBall = ballId => S.rooms.flatMap(r => r.segments.filter(s => s.ballId === ballId).map(s => ({ room: r, seg: s })));
+// Count chat threads that were started from this ball (not every message within each thread).
+const ballReplyCount = ballId => S?.rooms?.reduce((total,room)=>total+room.segments.filter(seg=>seg.ballId===ballId).length,0) || 0;
 const ballHasLock = b => segsFromBall(b.id).some(x => segHasLock(x.seg));
 const lockById = (r, id) => { for (const s of r.segments) { const l = s.locks.find(l => l.id === id); if (l) return l; } return null; };
 /* 錠の効果は「いちばん新しい区切り」の中だけ。玉の区切りはまたがない */
@@ -978,8 +980,15 @@ function drawBall(ctx, cx, cy, r, b, o = {}) {
   if (b.type === 'mood') {
     const n = Math.max(1, chars(b.text));
     const fs = r * [0, .66, .56, .46, .37, .3][Math.min(5, n)];
+    const count = ballReplyCount(b.id);
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = .87;
+    ctx.font = `600 ${Math.max(9, r * .26)}px ${getComputedStyle(document.documentElement).getPropertyValue('--sans')}`;
+    ctx.fillText(String(count), cx, cy - r * .45);
+    ctx.restore();
     ctx.font = `500 ${fs}px ${getComputedStyle(document.documentElement).getPropertyValue('--mincho')}`;
-    ctx.fillText(b.text, cx, cy + fs * .04);
+    ctx.fillText(b.text, cx, cy + r * .14);
   } else {
     const name = (user(b.owner) || {}).name || '';
     const fs = Math.min(r * .34, r * 1.45 / Math.max(2, chars(name)));
@@ -1007,7 +1016,7 @@ function drawBall(ctx, cx, cy, r, b, o = {}) {
 const spriteCache = new Map();
 function ballSprite(b, r, dpr) {
   const lock = ballHasLock(b);
-  const key = b.id + '|' + Math.round(r) + '|' + lock + '|' + fontGen + '|' + dpr + '|' + ((user(b.owner) || {}).gender) + ((user(b.owner) || {}).name);
+  const key = b.id + '|' + Math.round(r) + '|' + lock + '|' + ballReplyCount(b.id) + '|' + fontGen + '|' + dpr + '|' + ((user(b.owner) || {}).gender) + ((user(b.owner) || {}).name);
   let c = spriteCache.get(key);
   if (c) return c;
   const pad = Math.ceil(r * .7), size = Math.ceil((r + pad) * 2);
