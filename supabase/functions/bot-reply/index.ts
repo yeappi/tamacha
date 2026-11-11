@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
       "以下は会話の履歴。最後の発言への返信本文だけを返す：\\n" + history,
     ].join("\\n");
 
-    const model = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash-lite";
+    const model = Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash-lite";
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
