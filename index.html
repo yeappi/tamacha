@@ -1055,6 +1055,26 @@ function ballCanvas(b, r, o = {}) {
 /* =====================================================================
    ワールド — 玉が降り、積もり、世界が少しずつ押し上げられる
    ===================================================================== */
+// Keep track of balls already retrieved, even after a browser reload.
+// Only genuinely new arrivals should repeat the falling animation.
+const SEEN_BALLS_KEY = 'tamacha_seen_balls_v1';
+let seenBallIds = new Set();
+try {
+  const stored = JSON.parse(localStorage.getItem(SEEN_BALLS_KEY) || '[]');
+  if (Array.isArray(stored)) seenBallIds = new Set(stored.filter(id => typeof id === 'string').slice(-1000));
+} catch(e) {}
+function rememberSeenBalls(list) {
+  let changed = false;
+  for (const ball of list) {
+    if (!seenBallIds.has(ball.id)) { seenBallIds.add(ball.id); changed = true; }
+  }
+  if (changed) {
+    // Retain a rolling history to avoid unbounded local storage.
+    const ids = Array.from(seenBallIds).slice(-1000);
+    seenBallIds = new Set(ids);
+    try { localStorage.setItem(SEEN_BALLS_KEY, JSON.stringify(ids)); } catch(e) {}
+  }
+}
 class World {
   constructor(host, opts) {
     this.host = host; this.opts = opts;
@@ -1090,8 +1110,9 @@ class World {
     this.built = true;
     const list = S.balls.filter(this.opts.filter).sort((a, b) => a.at - b.at);
     const t = now();
-    const old = animateRecent ? list.filter(b => t - b.at > CONFIG.recentFallMs) : list;
-    const recent = animateRecent ? list.filter(b => t - b.at <= CONFIG.recentFallMs) : [];
+    const old = animateRecent ? list.filter(b => seenBallIds.has(b.id) || t - b.at > CONFIG.recentFallMs) : list;
+    const recent = animateRecent ? list.filter(b => !seenBallIds.has(b.id) && t - b.at <= CONFIG.recentFallMs) : [];
+    rememberSeenBalls(list);
     this.bodies = []; this.drops = []; this.ripples = [];
     old.forEach((ball, i) => {
       const b = this.mk(ball), h = hash(ball.id);
