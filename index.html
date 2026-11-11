@@ -439,9 +439,9 @@ body.live #me .guide,body.live #me .tools,body.live #me .acct{display:none}
     <h1>こちゃ</h1><p>二人の会話を、誰かがそっとのぞく。<br>オンラインMVP</p>
     <form id="authForm"><label>メールアドレス</label><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
       <label>パスワード（6文字以上）</label><input name="password" type="password" minlength="6" autocomplete="current-password" required>
-      <div id="signupFields" hidden><label>表示名</label><input name="name" maxlength="20" placeholder="あなたの名前"></div>
-      <button class="btn hydra block" id="authSubmit" type="submit">ログイン</button></form>
-    <button class="link" type="button" id="authSwitch">新規登録はこちら</button>
+      <div id="signupFields"><label>表示名</label><input name="name" maxlength="20" placeholder="あなたの名前"></div>
+      <button class="btn hydra block" id="authSubmit" type="submit">新規登録</button></form>
+    <button class="link" type="button" id="authSwitch">ログインはこちら</button>
     <button class="link" type="button" id="authClose">閉じて、まずはのぞき見する</button><p id="authError"></p>
     <p style="margin:8px 0 0;font-size:11px">通常の会話は他の利用者に公開されます。<br>錠の使用中だけ閲覧が制限されます。<br>購入はすべてテスト用で料金は発生しません。</p>
   </div></div>
@@ -1965,7 +1965,7 @@ async function boot(){
  try{
   if(!window.supabase){$('#authError').textContent='通信ライブラリを読み込めません。再読み込みしてください。';return;}
   SB=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
-  let signup=false;
+  let signup=true;
   $('#authSwitch').onclick=()=>{signup=!signup;$('#signupFields').hidden=!signup;$('#authSubmit').textContent=signup?'新規登録':'ログイン';$('#authSwitch').textContent=signup?'ログインはこちら':'新規登録はこちら';$('#authError').textContent='';};
   $('#authForm').onsubmit=async e=>{
     e.preventDefault();$('#authError').textContent='';const btn=$('#authSubmit');btn.disabled=true;btn.textContent='接続中…';
